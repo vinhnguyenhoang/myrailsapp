@@ -1,92 +1,55 @@
-# Import new data
-def update_auto_increment_for(model)
-  max_id = model.maximum(:id) || 0
-  new_auto_increment = max_id + 1
-  ActiveRecord::Base.connection.execute(
-    "ALTER TABLE #{model.table_name} AUTO_INCREMENT = #{new_auto_increment}"
+# Assuming PRICE_RANGES constant is available
+PRICE_RANGES = [
+  50_000, 100_000, 150_000, 200_000, 250_000, 300_000, 350_000,
+  400_000, 450_000, 500_000, 600_000, 700_000, 800_000,
+  900_000, 1_000_000, 1_200_000, 1_400_000, 1_500_000,
+  1_600_000, 1_800_000, 2_000_000, 2_500_000, 3_000_000,
+  3_500_000, 4_000_000, 4_500_000, 5_000_000, 6_000_000,
+  7_000_000, 8_000_000, 9_000_000, 10_000_000
+]
+
+# Seed import script
+require 'yaml'
+puts "start: seeding ===================="
+
+file_path = Rails.root.join("db/seeds/products.yml")
+products = YAML.safe_load(File.read(file_path), permitted_classes: [ Symbol, Date ], aliases: true)
+
+puts "File .yml has #{products.count} products"
+
+# Prepare products for import
+products_to_import = products.map do |product_data|
+  Product.new(
+    maker_id: product_data[:maker_id],
+    car_model_id: product_data[:car_model_id],
+    prefecture_id: product_data[:prefecture_id],
+    body_type_id: product_data[:body_type_id],
+    exported_at: product_data[:exported_at],
+    color: product_data[:color],
+    fuel_type: product_data[:fuel_type],
+    mileage: product_data[:mileage],
+    engine_capacity: product_data[:engine_capacity],
+    is_new: product_data[:is_new],
+    transmission_type: product_data[:transmission_type]
+  ).tap do |product|
+    # Map each stock range dynamically
+    PRICE_RANGES.each do |price|
+      product["stock_under_#{price}"] = product_data[:"stock_under_#{price}"]
+    end
+  end
+end
+
+# Import the data using ActiveRecord Import with `on_duplicate_key_update`
+begin
+  ActiveRecord::Base.connection.execute("SET FOREIGN_KEY_CHECKS=0;")
+  Product.import(
+    products_to_import,
+    on_duplicate_key_update: PRICE_RANGES.map { |price| :"stock_under_#{price}" },
+    batch_size: 1000
   )
-end
-products = [
-  { name: "Product A", price: 1 },
-  { name: "Product B", price: 2 },
-  { name: "Product C", price: 3 },
-  { name: "Product D", price: 4 }
-]
-Product.import(
-  [:name, :price],
-  products,
-  on_duplicate_key_update: [:price]
-)
-
-# update value AUTO_INCREMENT
-# update_auto_increment_for(Product)
-
-puts "Products new data import:"
-Product.all.each do |p|
-  puts "ID: #{p.id}, Name: #{p.name}, Price: #{p.price}, Created At: #{p.created_at}, Updated At: #{p.updated_at}"
+  ActiveRecord::Base.connection.execute("SET FOREIGN_KEY_CHECKS=1;")
+rescue StandardError => e
+  puts "Error during import: #{e.message}"
 end
 
-new_products = [
-  { name: "Product E", price: 315.0 },
-  { name: "Product C", price: 6.0 },
-  { name: "Product A", price: 89.0 },
-  { name: "Product G", price: 83.0 }
-]
-
-Product.import(
-  [:name, :price],
-  new_products,
-  on_duplicate_key_update: [:price]
-)
-
-# update value AUTO_INCREMENT
-# update_auto_increment_for(Product)
-
-puts "Products data import 2:"
-Product.all.each do |p|
-  puts "ID: #{p.id}, Name: #{p.name}, Price: #{p.price}, Created At: #{p.created_at}, Updated At: #{p.updated_at}"
-end
-
-# Import new data after insert duplicate
-new_products = [
-  { name: "Product H", price: 1 },
-  { name: "Product K", price: 2 },
-  { name: "Product C", price: 3 },
-  { name: "Product D", price: 4 },
-  { name: "Product E", price: 5 },
-  { name: "Product L", price: 6 },
-  { name: "Product A", price: 7 },
-  { name: "Product G", price: 8 }
-]
-
-Product.import(
-  [:name, :price],
-  new_products,
-  on_duplicate_key_update: [:price]
-)
-
-# update value AUTO_INCREMENT
-# update_auto_increment_for(Product)
-
-puts "Products data import 3:"
-Product.all.each do |p|
-  puts "ID: #{p.id}, Name: #{p.name}, Price: #{p.price}, Created At: #{p.created_at}, Updated At: #{p.updated_at}"
-end
-
-# Import new data after insert duplicate
-new_products = [
-  { name: "Product M", price: 1 },
-  { name: "Product N", price: 2 },
-  { name: "Product O", price: 3 },
-]
-
-Product.import(
-  [:name, :price],
-  new_products,
-  on_duplicate_key_update: [:price]
-)
-
-puts "Products after import:"
-Product.all.each do |p|
-  puts "ID: #{p.id}, Name: #{p.name}, Price: #{p.price}, Created At: #{p.created_at}, Updated At: #{p.updated_at}"
-end
+puts "Imported #{Product.all.count} products using ActiveRecord Import."

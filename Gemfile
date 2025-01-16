@@ -1,5 +1,6 @@
 source "https://rubygems.org"
 
+gem 'faker'
 gem 'activerecord-import'
 gem 'mysql2'
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
